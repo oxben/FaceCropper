@@ -2,12 +2,13 @@
 
 # Face detection with OpenCV
 #
-# Usage: ./detect-faces.py la-garde.jpg /usr/share/opencv/haarcascades/haarcascade_frontalface_alt.xml
+# Usage: ./detect-faces.py image_file1 image_file2 ...
 #
 # Tutorial: https://realpython.com/blog/python/face-recognition-with-python/
 
 import cv2
 from datetime import datetime
+import os.path
 import sys
 import PIL.Image
 import PIL.ExifTags
@@ -18,18 +19,27 @@ ROTATE_CCW  = 2
 
 prefs = None
 
+class Stats:
+    def __init__(self):
+        self.nfiles = 0
+        self.nfaces = 0
+        self.skip_image_too_small = 0
+        self.skip_face_too_small  = 0
+
 class Prefs:
     def __init__(self):
-        self.draw_borders = True
-        self.show_faces   = True
-        self.border_ratio = 0.30
-        self.square       = True
-        #self.cascade      = '/usr/share/opencv/haarcascades/haarcascade_frontalface_default.xml'
-        self.cascade      = '/usr/share/opencv/haarcascades/haarcascade_frontalface_alt.xml'
-        self.prefix       = 'face-'
-        self.resize       = True
-        self.min_size     = 48
-        self.output_size  = 128
+        self.draw_borders   = False
+        self.show_faces     = False
+        self.border_ratio   = 0.30
+        self.square         = True
+        #self.cascade       = '/usr/share/opencv/haarcascades/haarcascade_frontalface_default.xml'
+        self.cascade        = '/usr/share/opencv/haarcascades/haarcascade_frontalface_alt.xml'
+        self.prefix         = 'face'
+        self.resize         = True
+        self.min_image_size = 1000
+        self.min_face_size  = 128
+        self.output_size    = 256
+        self.skip_exist     = False
 
 def read_image_exif(imagepath):
     # http://stackoverflow.com/questions/4764932/din-python-how-do-i-read-the-exif-data-for-an-image
@@ -48,19 +58,34 @@ def read_image_exif(imagepath):
     except:
         return {}
 
-def detect_faces(imagePath, faceCascade, index):
+def detect_faces(imagePath, faceCascade):
     print("Processing: " + imagePath)
 
     # Read image EXIF data to get image's original date
+    # If there's no EXIF, use file modification time
     exif = read_image_exif(imagePath)
     try:
         dt = datetime.strptime(exif['DateTimeOriginal'], "%Y:%m:%d %H:%M:%S")
-        prefix = dt.strftime("%Y%m%d-") + prefs.prefix
     except:
-        prefix = "00000000-" + prefs.prefix
+        dt = datetime.fromtimestamp(os.path.getmtime(imagePath))
+    prefix = prefs.prefix + dt.strftime("-%Y%m%d-%H%M%S")
+
+    # Check if image has already been processed (ie. a face already exists for it)
+    if not prefs.skip_exist and os.path.isfile(prefix + '-0.jpg'):
+        print("  Skip. Image has already been processed before (%s)") % (prefix + '-0.jpg')
+        return 0
 
     # Read the image
     image = cv2.imread(imagePath)
+
+     # Get image size
+    image_height, image_width = image.shape[:2]
+
+    # Skip small image
+    if image_height < prefs.min_image_size or image_width < prefs.min_image_size:
+        print("  Skip. Image too small (%dx%d).") % (image_height, image_width)
+        stats.skip_image_too_small += 1
+        return 0
 
     # Determine if image needs to be rotated
     # EXIF orientations: http://jpegclub.org/exif_orientation.html
@@ -74,7 +99,6 @@ def detect_faces(imagePath, faceCascade, index):
             need_rotate = ROTATE_CCW
         elif orientation != 1:
             print("**** Orientation = %d ****") % (orientation)
-        print("**** Orientation = %d ****") % (orientation)
     except:
         pass
     if need_rotate == ROTATE_CW:
@@ -86,7 +110,7 @@ def detect_faces(imagePath, faceCascade, index):
         image = cv2.transpose(image)
         image = cv2.flip(image, 0)
 
-    # Get image size
+    # Update image size
     image_height, image_width = image.shape[:2]
 
     # Show thumbnailed image
@@ -106,7 +130,7 @@ def detect_faces(imagePath, faceCascade, index):
         scaleFactor = 1.1,
         minNeighbors = 5,
         #minSize = (30, 30),
-        minSize = (prefs.min_size, prefs.min_size),
+        minSize = (prefs.min_face_size, prefs.min_face_size),
         flags = cv2.cv.CV_HAAR_SCALE_IMAGE
     )
 
@@ -115,7 +139,9 @@ def detect_faces(imagePath, faceCascade, index):
     # Process the faces
     i = 0
     for (x, y, w, h) in faces:
-        facepath = prefix + str(index + i) + ".png"
+        stats.nfaces += 1
+
+        facepath = prefix + '-' + str(i) + ".jpg"
         print("  * x=%-4d y=%-4d w=%-4d h=%-4d --> %s") % (x, y, w, h, facepath)
 
         # Grow face limits to get more context (eg. 30% more than the longest dimension)
@@ -135,6 +161,12 @@ def detect_faces(imagePath, faceCascade, index):
             w = min(max(h, w) + border * 2, image_width)
             h = min(max(h, h) + border * 2, image_height)
 
+        # Skip face smaller than output size
+        if w < prefs.output_size or h < prefs.output_size:
+            print("    Skip. Face too small")
+            stats.skip_face_too_small += 1
+            continue
+
         # Crop face
         # http://stackoverflow.com/questions/15589517/how-to-crop-an-image-in-opencv-using-python
         face = image[y:y+h, x:x+w]
@@ -143,17 +175,16 @@ def detect_faces(imagePath, faceCascade, index):
         if prefs.resize:
             face = cv2.resize(face,
                               (prefs.output_size, prefs.output_size),
-                              #interpolation=cv2.INTER_CUBIC)
-                              interpolation=cv2.INTER_LANCZOS4)
+                              interpolation=cv2.INTER_CUBIC)
+                              #interpolation=cv2.INTER_LANCZOS4)
 
         # Save face
-        cv2.imwrite(facepath, face)
+        cv2.imwrite(facepath, face, [cv2.IMWRITE_JPEG_QUALITY, 93])
 
         if prefs.show_faces:
             cv2.imshow("Face", face)
             cv2.moveWindow("Face", 500, 400)
             cv2.waitKey(500)
-
         i += 1
 
     # Draw a rectangle around the faces in original image
@@ -194,16 +225,30 @@ def pil_to_cv2():
 
 def main():
     global prefs
+    global stats
+
+    nfiles = 0
+    nfaces = 0
     prefs = Prefs()
+    stats = Stats()
 
     # Create the haar cascade
     faceCascade = cv2.CascadeClassifier(prefs.cascade)
 
     # Detect faces in each image passed in argument
-    index = 0
-    for imagePath in sys.argv[1:]:
-        faces = detect_faces(imagePath, faceCascade, index)
-        index += faces
+    # Walk through all args and subdirectories
+    for path in sys.argv[1:]:
+        if os.path.isfile(path):
+           detect_faces(path, faceCascade)
+           stats.nfiles += 1
+        elif os.path.isdir(path):
+            for root, dirs, files in os.walk(path):
+                for name in files:
+                    if name.endswith('.jpg') or name.endswith('.JPG'):
+                        detect_faces(os.path.join(root, name), faceCascade)
+                        stats.nfiles += 1
+    print("%d files scanned") % (stats.nfiles)
+    print("%d faces detected") % (stats.nfaces)
 
 if __name__ == "__main__":
     main()
