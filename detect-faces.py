@@ -13,6 +13,8 @@ import sys
 import PIL.Image
 import PIL.ExifTags
 
+import levels
+
 ROTATE_NONE = 0
 ROTATE_CW   = 1
 ROTATE_CCW  = 2
@@ -36,10 +38,11 @@ class Prefs:
         self.cascade        = '/usr/share/opencv/haarcascades/haarcascade_frontalface_alt.xml'
         self.prefix         = 'face'
         self.resize         = True
-        self.min_image_size = 1000
-        self.min_face_size  = 128
+        self.min_image_size = 500
+        self.min_face_size  = 64
         self.output_size    = 256
         self.skip_exist     = False
+        self.auto_adjust    = True
 
 def read_image_exif(imagepath):
     # http://stackoverflow.com/questions/4764932/din-python-how-do-i-read-the-exif-data-for-an-image
@@ -180,6 +183,11 @@ def detect_faces(imagePath, faceCascade):
 
         # Save face
         cv2.imwrite(facepath, face, [cv2.IMWRITE_JPEG_QUALITY, 93])
+
+        if prefs.auto_adjust:
+            im1 = PIL.Image.open(facepath)
+            im2 = levels.levels(im1)
+            im2.save(facepath, "JPEG", quality=93)
 
         if prefs.show_faces:
             cv2.imshow("Face", face)
