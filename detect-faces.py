@@ -32,7 +32,7 @@ class Prefs:
     def __init__(self):
         self.draw_borders   = False
         self.show_faces     = False
-        self.border_ratio   = 0.30
+        self.border_ratio   = 0.40
         self.square         = True
         #self.cascade       = '/usr/share/opencv/haarcascades/haarcascade_frontalface_default.xml'
         self.cascade        = '/usr/share/opencv/haarcascades/haarcascade_frontalface_alt.xml'
@@ -80,6 +80,9 @@ def detect_faces(imagePath, faceCascade):
 
     # Read the image
     image = cv2.imread(imagePath)
+    if image is None:
+        print("  Skip. Cannot load image.")
+        return 0
 
      # Get image size
     image_height, image_width = image.shape[:2]
@@ -235,8 +238,6 @@ def main():
     global prefs
     global stats
 
-    nfiles = 0
-    nfaces = 0
     prefs = Prefs()
     stats = Stats()
 
@@ -255,8 +256,12 @@ def main():
                     if name.endswith('.jpg') or name.endswith('.JPG'):
                         detect_faces(os.path.join(root, name), faceCascade)
                         stats.nfiles += 1
+    # Print stats
     print("%d files scanned") % (stats.nfiles)
+    print("%d files skipped (too small)") % (stats.skip_image_too_small)
     print("%d faces detected") % (stats.nfaces)
+    print("%d faces saved") % (stats.nfaces - stats.skip_face_too_small)
+    print("%d faces skipped (too small)") % (stats.skip_face_too_small)
 
 if __name__ == "__main__":
     main()
