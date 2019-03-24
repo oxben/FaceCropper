@@ -8,6 +8,7 @@
 
 import cv2
 from datetime import datetime
+import logging
 import os.path
 import sys
 import PIL.Image
@@ -20,6 +21,9 @@ ROTATE_CW   = 1
 ROTATE_CCW  = 2
 
 prefs = None
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class Stats:
     def __init__(self):
