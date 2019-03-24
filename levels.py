@@ -67,14 +67,14 @@ def scale(channels, min, max):
 
 
 def makelut(data, all_same, clip):
-    import Image
+    import PIL.Image
 
     histogram = data.histogram()
 
     lut = []
     r, g, b, k = [], [], [], []
 
-    channels = len(histogram)/256
+    channels = len(histogram) // 256
 
     for i in range(256):
         r.append(histogram[i])

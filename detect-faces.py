@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 '''
 Face detection with OpenCV
@@ -44,18 +44,19 @@ class Prefs:
     '''Preferences class'''
 
     def __init__(self):
-        self.draw_borders   = False
+        self.draw_borders   = True
         self.show_faces     = False
         self.border_ratio   = 0.40
         self.square         = True
         #self.cascade       = '/usr/share/opencv/haarcascades/haarcascade_frontalface_default.xml'
         self.cascade        = '/usr/share/opencv/haarcascades/haarcascade_frontalface_alt.xml'
+        #self.cascade        = '/usr/share/opencv/haarcascades/haarcascade_profileface.xml'
         self.prefix         = 'face'
         self.resize         = True
         self.min_image_size = 500
         self.min_face_size  = 64
         self.output_size    = 256
-        self.skip_exist     = False
+        self.skip_exist     = True
         self.auto_adjust    = True
 
 #-------------------------------------------------------------------------------
@@ -74,7 +75,7 @@ def read_image_exif(imagepath):
         #print(exif)
         #print("  Date: ", exif['DateTimeOriginal'])
         #dt = datetime.strptime(exif['DateTimeOriginal'], "%Y:%m:%d %H:%M:%S")
-        #print("  Date: %s") % (dt.strftime("%Y%m%d"))
+        #print("  Date: %s" % (dt.strftime("%Y%m%d")))
         return exif
     except:
         return {}
@@ -94,8 +95,8 @@ def detect_faces(imagePath, faceCascade):
     prefix = prefs.prefix + dt.strftime("-%Y%m%d-%H%M%S")
 
     # Check if image has already been processed (ie. a face already exists for it)
-    if not prefs.skip_exist and os.path.isfile(prefix + '-0.jpg'):
-        print("  Skip. Image has already been processed before (%s)") % (prefix + '-0.jpg')
+    if prefs.skip_exist and os.path.isfile(prefix + '-0.jpg'):
+        print("  Skip. Image has already been processed before (%s)" % (prefix + '-0.jpg'))
         return 0
 
     # Read the image
@@ -109,42 +110,45 @@ def detect_faces(imagePath, faceCascade):
 
     # Skip small image
     if image_height < prefs.min_image_size or image_width < prefs.min_image_size:
-        print("  Skip. Image too small (%dx%d).") % (image_height, image_width)
+        print("  Skip. Image too small (%dx%d)." % (image_height, image_width))
         stats.skip_image_too_small += 1
         return 0
 
-    # Determine if image needs to be rotated
-    # EXIF orientations: http://jpegclub.org/exif_orientation.html
-    # http://stackoverflow.com/questions/2259678/easiest-way-to-rotate-by-90-degrees-an-image-using-opencv
-    need_rotate = ROTATE_NONE
-    try:
-        orientation = int(exif['Orientation'])
-        if orientation == 6:
-            need_rotate = ROTATE_CW
-        elif orientation == 8:
-            need_rotate = ROTATE_CCW
-        elif orientation != 1:
-            print("**** Orientation = %d ****") % (orientation)
-    except:
-        pass
-    if need_rotate == ROTATE_CW:
-        print ("  Rotate clockwise")
-        image = cv2.transpose(image)
-        image = cv2.flip(image, 1)
-    elif need_rotate == ROTATE_CCW:
-        print ("  Rotate counter-clockwise")
-        image = cv2.transpose(image)
-        image = cv2.flip(image, 0)
+    if False:
+        # OpenCV 3.x seems to handle orientation by itself
+        #
+        # Determine if image needs to be rotated
+        # EXIF orientations: http://jpegclub.org/exif_orientation.html
+        # http://stackoverflow.com/questions/2259678/easiest-way-to-rotate-by-90-degrees-an-image-using-opencv
+        need_rotate = ROTATE_NONE
+        try:
+            orientation = int(exif['Orientation'])
+            if orientation == 6:
+                need_rotate = ROTATE_CW
+            elif orientation == 8:
+                need_rotate = ROTATE_CCW
+            elif orientation != 1:
+                print("**** Orientation = %d ****") % (orientation)
+        except:
+            pass
+        if need_rotate == ROTATE_CW:
+            print ("  Rotate clockwise")
+            image = cv2.transpose(image)
+            image = cv2.flip(image, 1)
+        elif need_rotate == ROTATE_CCW:
+            print ("  Rotate counter-clockwise")
+            image = cv2.transpose(image)
+            image = cv2.flip(image, 0)
 
     # Update image size
     image_height, image_width = image.shape[:2]
 
     # Show thumbnailed image
     if prefs.show_faces:
-        tmp = cv2.resize(image, (image_width * 512 / image_height, 512), interpolation=cv2.INTER_NEAREST)
-        cv2.imshow("Image", tmp)
+        tmp = cv2.resize(image, (int(image_width * 512 / image_height), 512), interpolation=cv2.INTER_NEAREST)
         cv2.moveWindow("Image", 500, 400)
-        cv2.waitKey(200)
+        cv2.imshow("Image", tmp)
+        cv2.waitKey(1000)
 
     # "Convert image to grayscale. Many operations in OpenCV are done in grayscale."
     gray  = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -154,13 +158,12 @@ def detect_faces(imagePath, faceCascade):
     faces = faceCascade.detectMultiScale(
         gray,
         scaleFactor = 1.1,
-        minNeighbors = 5,
-        #minSize = (30, 30),
+        minNeighbors = 3,
         minSize = (prefs.min_face_size, prefs.min_face_size),
-        flags = cv2.cv.CV_HAAR_SCALE_IMAGE
+        flags = cv2.CASCADE_SCALE_IMAGE
     )
 
-    print("  Found %d faces:") % (len(faces))
+    print("  Found %d faces:" % (len(faces)))
 
     # Process the faces
     i = 0
@@ -168,7 +171,7 @@ def detect_faces(imagePath, faceCascade):
         stats.nfaces += 1
 
         facepath = prefix + '-' + str(i) + ".jpg"
-        print("  * x=%-4d y=%-4d w=%-4d h=%-4d --> %s") % (x, y, w, h, facepath)
+        print("  * x=%-4d y=%-4d w=%-4d h=%-4d --> %s" % (x, y, w, h, facepath))
 
         # Grow face limits to get more context (eg. 30% more than the longest dimension)
         border = int(max(h, w) * prefs.border_ratio / 2.0)
@@ -222,10 +225,10 @@ def detect_faces(imagePath, faceCascade):
     if prefs.draw_borders:
         for (x, y, w, h) in faces:
             cv2.rectangle(image, (x, y), (x+w, y+h), (0, 255, 0), 4)
-        tmp = cv2.resize(image, (image_width * 512 / image_height, 512), interpolation=cv2.INTER_NEAREST)
-        cv2.imshow("Image", tmp)
+        tmp = cv2.resize(image, (int(image_width * 512 / image_height), 512), interpolation=cv2.INTER_NEAREST)
         cv2.moveWindow("Image", 500, 400)
-        cv2.waitKey(500)
+        cv2.imshow("Image", tmp)
+        cv2.waitKey(1000)
 
     # Destroy window before processing next image
     if prefs.show_faces or prefs.draw_borders:
@@ -293,11 +296,11 @@ def main():
                         detect_faces(os.path.join(root, name), faceCascade)
                         stats.nfiles += 1
     # Print stats
-    print("%d files scanned") % (stats.nfiles)
-    print("%d files skipped (too small)") % (stats.skip_image_too_small)
-    print("%d faces detected") % (stats.nfaces)
-    print("%d faces saved") % (stats.nfaces - stats.skip_face_too_small)
-    print("%d faces skipped (too small)") % (stats.skip_face_too_small)
+    print("%d files scanned" % (stats.nfiles))
+    print("%d files skipped (too small)" % (stats.skip_image_too_small))
+    print("%d faces detected" % (stats.nfaces))
+    print("%d faces saved" % (stats.nfaces - stats.skip_face_too_small))
+    print("%d faces skipped (too small)" % (stats.skip_face_too_small))
 
 if __name__ == "__main__":
     main()
