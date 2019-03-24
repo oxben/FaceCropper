@@ -233,10 +233,18 @@ def pil_to_cv2():
     cv2_im = cv2.cvtColor(numpy.array(pil_im), cv2.COLOR_RGB2BGR)
     cv2.imshow("Image", cv2_im)
 
+def usage():
+    '''Print usage'''
+    print("Usage: %s image1 image2 ... imageN" % sys.argv[0])
 
 def main():
+    '''Main function'''
     global prefs
     global stats
+
+    if len(sys.argv) < 2:
+        usage()
+        sys.exit(1)
 
     prefs = Prefs()
     stats = Stats()
