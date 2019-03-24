@@ -1,10 +1,14 @@
 #!/usr/bin/env python
 
-# Face detection with OpenCV
-#
-# Usage: ./detect-faces.py image_file1 image_file2 ...
-#
-# Tutorial: https://realpython.com/blog/python/face-recognition-with-python/
+'''
+Face detection with OpenCV
+
+Usage: ./detect-faces.py image_file1 image_file2 ...
+
+Author: Oxben <oxben@free.fr>
+
+Based on OpenCV tutorial: https://realpython.com/blog/python/face-recognition-with-python/
+'''
 
 import cv2
 from datetime import datetime
@@ -25,14 +29,20 @@ prefs = None
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+#-------------------------------------------------------------------------------
 class Stats:
+    '''Statistics class'''
+
     def __init__(self):
         self.nfiles = 0
         self.nfaces = 0
         self.skip_image_too_small = 0
         self.skip_face_too_small  = 0
 
+#-------------------------------------------------------------------------------
 class Prefs:
+    '''Preferences class'''
+
     def __init__(self):
         self.draw_borders   = False
         self.show_faces     = False
@@ -48,8 +58,12 @@ class Prefs:
         self.skip_exist     = False
         self.auto_adjust    = True
 
+#-------------------------------------------------------------------------------
 def read_image_exif(imagepath):
-    # http://stackoverflow.com/questions/4764932/din-python-how-do-i-read-the-exif-data-for-an-image
+    '''
+    Read EXIF data from an image
+    Based on: http://stackoverflow.com/questions/4764932/din-python-how-do-i-read-the-exif-data-for-an-image
+    '''
     image = PIL.Image.open(imagepath)
     try:
         exif = {
@@ -65,7 +79,9 @@ def read_image_exif(imagepath):
     except:
         return {}
 
+#-------------------------------------------------------------------------------
 def detect_faces(imagePath, faceCascade):
+    ''' Detect faces in an image'''
     print("Processing: " + imagePath)
 
     # Read image EXIF data to get image's original date
@@ -220,27 +236,35 @@ def detect_faces(imagePath, faceCascade):
     # Return number of detected faces
     return i
 
-# Image: OpenCV to PIL
-# http://stackoverflow.com/questions/13576161/convert-opencv-image-into-pil-image-in-python-for-use-with-zbar-library
+#-------------------------------------------------------------------------------
 def cv2_to_pil():
+    '''
+    Convert OpenCV image into a PIL image
+    Based on: http://stackoverflow.com/questions/13576161/convert-opencv-image-into-pil-image-in-python-for-use-with-zbar-library
+    '''
     cv2_im = cv2.imread(imagePath)
     # Do OpenCV operations
     cv2_im.cv2.cvtColor(cv2_im,cv2.COLOR_BGR2RGB)
     pil_im = Image.fromarray(cv2_im)
     pil_im.show()
 
-# Image: PIL to OpenCV
-# http://stackoverflow.com/questions/14134892/convert-image-from-pil-to-opencv-format
+#-------------------------------------------------------------------------------
 def pil_to_cv2():
+    '''
+    Convert a PIL image into an OpenCV image
+    Based on: http://stackoverflow.com/questions/14134892/convert-image-from-pil-to-opencv-format
+    '''
     pil_im = PIL.Image.open(imagePath)
     # Do PIL operations
     cv2_im = cv2.cvtColor(numpy.array(pil_im), cv2.COLOR_RGB2BGR)
     cv2.imshow("Image", cv2_im)
 
+#-------------------------------------------------------------------------------
 def usage():
     '''Print usage'''
     print("Usage: %s image1 image2 ... imageN" % sys.argv[0])
 
+#-------------------------------------------------------------------------------
 def main():
     '''Main function'''
     global prefs
